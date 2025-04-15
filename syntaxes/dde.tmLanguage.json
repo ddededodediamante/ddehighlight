@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "ddeLang",
+  "scopeName": "source.dde",
   "patterns": [
     {
       "name": "constant.numeric.ddeLang",
@@ -33,6 +34,10 @@
       "match": "\\b(true|false)\\b"
     },
     {
+      "name": "keyword.control.if.ddeLang",
+      "match": "\\b(if|elseif|else)\\b"
+    },
+    {
       "name": "keyword.operator.ddeLang",
       "match": "[+\\-*/=]"
     },
@@ -57,17 +62,20 @@
       "match": "[()]"
     },
     {
+      "name": "entity.name.function.ddeLang",
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b(?=\\s*=\\s*\\([^)]*\\)\\s*\\{)"
+    },
+    {
+      "name": "support.function.call.ddeLang",
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b(?=\\s*\\()"
+    },
+    {
       "name": "variable.other.identifier.ddeLang",
       "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
     },
     {
       "name": "comment.line.number-sign.ddeLang",
       "match": "#.*"
-    },
-    {
-      "name": "keyword.control.if.ddeLang",
-      "match": "\\b(if|elseif|else)\\b"
     }
-  ],
-  "scopeName": "source.dde"
+  ]
 }

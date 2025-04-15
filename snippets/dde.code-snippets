@@ -1,0 +1,45 @@
+{
+  "Function Template": {
+    "prefix": "function",
+    "body": [
+      "${1:functionName} = (${2:args}) {",
+      "  ${0:# code}",
+      "}"
+    ],
+    "description": "Insert a function template"
+  },
+  "Print Statement": {
+    "prefix": "print",
+    "body": [
+      "print(${1:args});"
+    ],
+    "description": "Insert a print statement"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if (${1:condition}) {",
+      "  ${0:# code}",
+      "}"
+    ],
+    "description": "Insert a print statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelseif",
+    "body": [
+      "if (${1:condition}) {",
+      "  ${0:# code}",
+      "} elseif (${2:condition}) {",
+      "  ${3:# other code}",
+      "}"
+    ],
+    "description": "Insert a print statement"
+  },
+  "Variable Declaration": {
+    "prefix": "variable",
+    "body": [
+      "${1:variableName} = ${2:value};"
+    ],
+    "description": "Variable declaration"
+  }
+}

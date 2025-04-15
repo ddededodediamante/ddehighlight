@@ -3,7 +3,7 @@
   "displayName": "ddeHighlight",
   "description": "Adds syntax highlighting for my custom language ddeLang.",
   "publisher": "ddededodediamante",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -11,24 +11,41 @@
     "Programming Languages"
   ],
   "contributes": {
-    "languages": [{
-      "id": "dde",
-      "aliases": ["ddeLang", "ddeInterpreter", "dde"],
-      "extensions": [".dde"],
-      "configuration": "./language-configuration.json",
-      "icon": {
-        "light": "./images/text.png",
-        "dark": "./images/text.png"
+    "languages": [
+      {
+        "id": "dde",
+        "aliases": [
+          "ddeLang",
+          "ddeInterpreter",
+          "dde"
+        ],
+        "extensions": [
+          ".dde"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/text.png",
+          "dark": "./images/text.png"
+        }
       }
-    }],
-    "grammars": [{
-      "language": "dde",
-      "scopeName": "source.dde",
-      "path": "./syntaxes/dde.tmLanguage.json"
-    }]
+    ],
+    "grammars": [
+      {
+        "language": "dde",
+        "scopeName": "source.dde",
+        "path": "./syntaxes/dde.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dde",
+        "path": "./snippets/dde.code-snippets"
+      }
+    ]
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/ddededodediamante/ddehighlight"
-  }
+  },
+  "main": "./extension.js"
 }
