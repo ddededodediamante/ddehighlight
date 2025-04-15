@@ -3,7 +3,7 @@
   "displayName": "ddeHighlight",
   "description": "Adds syntax highlighting to my interpreter for \".dde\" files.",
   "publisher": "ddededodediamante",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.99.0"
   },
