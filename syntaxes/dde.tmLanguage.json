@@ -1,0 +1,61 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ddeLang",
+  "patterns": [
+    {
+      "name": "constant.numeric.ddeLang",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    {
+      "name": "string.quoted.double.ddeLang",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.ddeLang",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.ddeLang",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "name": "constant.character.escape.ddeLang",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "constant.language.boolean.ddeLang",
+      "match": "\\b(true|false)\\b"
+    },
+    {
+      "name": "keyword.operator.ddeLang",
+      "match": "[+\\-*/=]"
+    },
+    {
+      "name": "punctuation.separator.comma.ddeLang",
+      "match": ","
+    },
+    {
+      "name": "punctuation.terminator.ddeLang",
+      "match": ";"
+    },
+    {
+      "name": "punctuation.section.brackets.ddeLang",
+      "match": "[{}]"
+    },
+    {
+      "name": "punctuation.section.parens.ddeLang",
+      "match": "[()]"
+    },
+    {
+      "name": "variable.other.identifier.ddeLang",
+      "match": "\\b[a-zA-Z_]+\\b"
+    }
+  ],
+  "scopeName": "source.dde"
+}

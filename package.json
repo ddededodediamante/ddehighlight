@@ -1,0 +1,25 @@
+{
+  "name": "ddehighlight",
+  "displayName": "ddeHighlight",
+  "description": "Adds syntax highlighting to my interpreter on \".dde\" files.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "dde",
+      "aliases": ["ddeInterpreter", "dde"],
+      "extensions": [".dde"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "dde",
+      "scopeName": "source.dde",
+      "path": "./syntaxes/dde.tmLanguage.json"
+    }]
+  }
+}
