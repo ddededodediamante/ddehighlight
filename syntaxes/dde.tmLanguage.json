@@ -66,7 +66,7 @@
     },
     {
       "name": "keyword.control.if.ddeLang",
-      "match": "\\bif\\b"
+      "match": "\\b(if|elseif|else)\\b"
     }
   ],
   "scopeName": "source.dde"

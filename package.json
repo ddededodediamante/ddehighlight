@@ -1,9 +1,9 @@
 {
   "name": "ddehighlight",
   "displayName": "ddeHighlight",
-  "description": "Adds syntax highlighting to my interpreter for \".dde\" files.",
+  "description": "Adds syntax highlighting for my custom language ddeLang.",
   "publisher": "ddededodediamante",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -13,9 +13,13 @@
   "contributes": {
     "languages": [{
       "id": "dde",
-      "aliases": ["ddeInterpreter", "dde"],
+      "aliases": ["ddeLang", "ddeInterpreter", "dde"],
       "extensions": [".dde"],
-      "configuration": "./language-configuration.json"
+      "configuration": "./language-configuration.json",
+      "icon": {
+        "light": "./images/text.png",
+        "dark": "./images/text.png"
+      }
     }],
     "grammars": [{
       "language": "dde",

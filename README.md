@@ -9,7 +9,9 @@ A Visual Studio Code extension that adds syntax highlighting for the `ddeLanguag
   - Strings (single and double quoted)
   - Booleans (`true`, `false`)
   - Identifiers
+  - Control keywords (`if`, `elseif`, `else`)
   - Operators (`+`, `-`, `*`, `/`, `=`)
+  - Comparators (`==`, `!=`, `<=`, `>=`, `<`, `>`)
   - Commas and semicolons
   - Brackets (`{}`, `()`)
 - Matches the structure of a custom tokenizer used for `ddeLanguage`.
@@ -24,11 +26,11 @@ It is currenly a work in progress, but more features will be added soon.
 ```dde
 x = random(1, 10);
 
-print('the value of x is', x, ", and it's type is", typeof(x), '!');
+print('The value of x is', x, "and it's of type", typeof(x));
 
-y = 'hello ' + ' world';
+y = 'Hello ' + ' World!';
 
-print(y, ' | ', typeof(y));
+print(y, '|', typeof(y));
 
 print({ a = 1; b = 2; a + b; } + { 5 * 5 });
 ```

@@ -2,8 +2,14 @@
 
 All notable changes to the "ddehighlight" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.1]
 
-## [Unreleased]
+- Initial release, includes basics
 
-- Initial release
+## [0.0.2]
+
+- Added syntax highlighting support for comments
+
+## [0.0.3]
+
+- Added syntax highlighting support for new keywords (elseif, else) and added an icon
