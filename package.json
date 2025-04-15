@@ -1,7 +1,8 @@
 {
   "name": "ddehighlight",
   "displayName": "ddeHighlight",
-  "description": "Adds syntax highlighting to my interpreter on \".dde\" files.",
+  "description": "Adds syntax highlighting to my interpreter for \".dde\" files.",
+  "publisher": "ddededodediamante",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.99.0"
@@ -21,5 +22,9 @@
       "scopeName": "source.dde",
       "path": "./syntaxes/dde.tmLanguage.json"
     }]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ddededodediamante/ddehighlight"
   }
 }
