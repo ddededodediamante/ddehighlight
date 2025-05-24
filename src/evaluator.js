@@ -1,0 +1,204 @@
+// @ts-nocheck
+export function scriptFunctions(outputFunction = console.log) {
+  return {
+    print: (...args) => {
+      if (args.length < 1) {
+        throw new Error("expected 1 argument, got 0");
+      }
+      outputFunction(args.join(" "));
+      return null;
+    },
+    typeof: (x) => {
+      return typeof x;
+    },
+    exit: () => {
+      return process.exit(0);
+    },
+    random: (min, max, isFloat = false) => {
+      if (min === undefined && max === undefined) {
+        return Math.random();
+      } else if (max === undefined) [max, min] = [min, 0];
+
+      if (min > max) [min, max] = [max, min];
+
+      if (isFloat) {
+        return Math.random() * (max - min) + min;
+      } else {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+    },
+    isFart: (value) => {
+      return value === "fart";
+    },
+    array: (length, fill) => {
+      if (typeof length !== "number") {
+        throw new Error("expected number argument, got " + typeof length);
+      }
+
+      return Array(length).fill(fill);
+    },
+  };
+}
+
+export function evaluate(node, environment = {}, functions) {
+  switch (node.type) {
+    case "number":
+    case "string":
+    case "boolean":
+      return node.value;
+    case "identifier":
+      if (!(node.name in environment)) {
+        throw new Error("undefined variable: " + node.name);
+      }
+      return environment[node.name];
+    case "binary": {
+      const left = evaluate(node.left, environment);
+      const right = evaluate(node.right, environment);
+
+      switch (node.operator) {
+        case "+":
+          return left + right;
+        case "-":
+          return left - right;
+        case "*":
+          return left * right;
+        case "/":
+          return left / right;
+        case "==":
+          return left === right;
+        case "!=":
+          return left !== right;
+        case ">":
+          return left > right;
+        case "<":
+          return left < right;
+        case ">=":
+          return left >= right;
+        case "<=":
+          return left <= right;
+        default:
+          throw new Error("unknown operator " + node.operator);
+      }
+    }
+    case "array":
+      return node.arguments.map((arg) => evaluate(arg, environment));
+    case "assignment": {
+      let { expression } = node,
+        value;
+
+      if (expression.type === "function") {
+        if (node.name in functions) {
+          throw new Error("cannot redefine function " + node.name);
+        }
+
+        value = {
+          type: "userFunction",
+          params: expression.params,
+          body: node.expression.body,
+        };
+      } else {
+        value = evaluate(expression, environment);
+      }
+
+      environment[node.name] = value;
+      return value;
+    }
+    case "call": {
+      const args = node.arguments.map((arg) => evaluate(arg, environment));
+
+      if (node.callee && node.callee.type === "property") {
+        const obj = evaluate(node.callee.object, environment);
+        const prop = node.callee.property;
+
+        if (Array.isArray(obj)) {
+          if (prop === "push") {
+            obj.push(...args);
+            return obj;
+          }
+        }
+
+        const method = obj?.[prop];
+        if (typeof method === "function") {
+          return method.apply(obj, args);
+        }
+
+        throw new Error("property is not a function: " + prop);
+      }
+
+      if (typeof functions[node.name] === "function") {
+        return functions[node.name](...args);
+      }
+      
+      const userFunction = environment[node.name];
+      if (userFunction && userFunction.type === "userFunction") {
+        const local = { ...environment };
+        for (let i = 0; i < userFunction.params.length; i++) {
+          const paramName = userFunction.params[i];
+          local[paramName] = args[i];
+        }
+        return evaluate(userFunction.body, local);
+      }
+
+      throw new Error(
+        "unknown function: " + (node.name ?? node.callee?.property)
+      );
+    }
+    case "block": {
+      let result = null;
+
+      for (const statement of node.arguments) {
+        result = evaluate(statement, environment);
+      }
+
+      return result;
+    }
+    case "if": {
+      const condition = evaluate(node.condition, environment);
+      if (condition) {
+        return evaluate(node.arguments, environment);
+      } else if (node.else) {
+        return evaluate(node.else, environment);
+      }
+      return null;
+    }
+    case "for": {
+      const { item, index, iterable, body } = node;
+
+      const iterableValue = evaluate(iterable, environment);
+
+      if (!Array.isArray(iterableValue)) {
+        throw new Error("expected iterable, got " + typeof iterableValue);
+      }
+
+      let result = null;
+      let local = { ...environment };
+
+      for (let i = 0; i < iterableValue.length; i++) {
+        const currentItem = iterableValue[i];
+
+        local[item] = currentItem;
+        if (index) {
+          local[index] = i;
+        }
+
+        result = evaluate(body, local);
+      }
+
+      return result;
+    }
+    case "function":
+      throw new Error("functions must be assigned to a variable");
+    case "property": {
+      const object = evaluate(node.object, environment);
+      const property = node.property;
+
+      if (Array.isArray(object)) {
+        if (property === "length") return object.length;
+      }
+
+      return object[property];
+    }
+    default:
+      throw new Error("unknown node type " + node.type);
+  }
+}

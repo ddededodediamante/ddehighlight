@@ -1,9 +1,9 @@
 {
-  "name": "ddehighlight",
-  "displayName": "ddeHighlight",
-  "description": "Adds syntax highlighting for my custom language ddeLang.",
+  "name": "ddelang",
+  "displayName": "ddeLang",
+  "description": "Adds support for the custom .dde language, with autocomplete, highlighting and more.",
   "publisher": "ddededodediamante",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -17,7 +17,8 @@
         "aliases": [
           "ddeLang",
           "ddeInterpreter",
-          "dde"
+          "dde",
+          "ddededodediamante"
         ],
         "extensions": [
           ".dde"
@@ -41,10 +42,32 @@
         "language": "dde",
         "path": "./snippets/dde.code-snippets"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "dde.runFile",
+        "title": "Run DDE File"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "dde.runFile",
+          "when": "resourceExtname == .dde",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "dde.runFile",
+          "when": "resourceExtname == .dde"
+        }
+      ]
+    }
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/ddededodediamante/ddehighlight"
-  }
+  },
+  "main": "extension.js"
 }
