@@ -65,6 +65,10 @@
       ]
     }
   },
+  "activationEvents": [
+    "onLanguage:dde",
+    "onCommand:dde.runFile"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/ddededodediamante/ddehighlight"
