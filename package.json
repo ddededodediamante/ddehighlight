@@ -3,7 +3,7 @@
   "displayName": "ddeLang",
   "description": "Adds support for the custom .dde language, with autocomplete, highlighting and more.",
   "publisher": "ddededodediamante",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "vscode": "^1.99.0"
   },
