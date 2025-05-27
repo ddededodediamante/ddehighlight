@@ -136,7 +136,7 @@ export function evaluate(node, environment = {}, functions) {
           const paramName = userFunction.params[i];
           local[paramName] = args[i];
         }
-        return evaluate(userFunction.body, local);
+        return evaluate(userFunction.body, local, functions); 
       }
 
       throw new Error(
