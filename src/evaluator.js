@@ -52,8 +52,8 @@ export function evaluate(node, environment = {}, functions) {
       }
       return environment[node.name];
     case "binary": {
-      const left = evaluate(node.left, environment);
-      const right = evaluate(node.right, environment);
+      const left = evaluate(node.left, environment, functions);
+      const right = evaluate(node.right, environment, functions);
 
       switch (node.operator) {
         case "+":
@@ -81,7 +81,7 @@ export function evaluate(node, environment = {}, functions) {
       }
     }
     case "array":
-      return node.arguments.map((arg) => evaluate(arg, environment));
+      return node.arguments.map((arg) => evaluate(arg, environment, functions));
     case "assignment": {
       let { expression } = node,
         value;
@@ -128,7 +128,7 @@ export function evaluate(node, environment = {}, functions) {
       if (typeof functions[node.name] === "function") {
         return functions[node.name](...args);
       }
-      
+
       const userFunction = environment[node.name];
       if (userFunction && userFunction.type === "userFunction") {
         const local = { ...environment };
@@ -136,7 +136,7 @@ export function evaluate(node, environment = {}, functions) {
           const paramName = userFunction.params[i];
           local[paramName] = args[i];
         }
-        return evaluate(userFunction.body, local, functions); 
+        return evaluate(userFunction.body, local, functions);
       }
 
       throw new Error(
@@ -147,41 +147,40 @@ export function evaluate(node, environment = {}, functions) {
       let result = null;
 
       for (const statement of node.arguments) {
-        result = evaluate(statement, environment);
+        result = evaluate(statement, environment, functions);
       }
 
       return result;
     }
     case "if": {
-      const condition = evaluate(node.condition, environment);
+      const condition = evaluate(node.condition, environment, functions);
       if (condition) {
-        return evaluate(node.arguments, environment);
+        return evaluate(node.arguments, environment, functions);
       } else if (node.else) {
-        return evaluate(node.else, environment);
+        return evaluate(node.else, environment, functions);
       }
+
       return null;
     }
     case "for": {
       const { item, index, iterable, body } = node;
 
-      const iterableValue = evaluate(iterable, environment);
+      const iterableValue = evaluate(iterable, environment, functions);
 
       if (!Array.isArray(iterableValue)) {
         throw new Error("expected iterable, got " + typeof iterableValue);
       }
 
       let result = null;
-      let local = { ...environment };
 
       for (let i = 0; i < iterableValue.length; i++) {
-        const currentItem = iterableValue[i];
-
-        local[item] = currentItem;
+        let local = { ...environment };
+        local[item] = iterableValue[i];
         if (index) {
           local[index] = i;
         }
 
-        result = evaluate(body, local);
+        result = evaluate(body, local, functions);
       }
 
       return result;
