@@ -6,9 +6,10 @@ export function scriptFunctions(outputFunction = console.log) {
         throw new Error("expected 1 argument, got 0");
       }
       outputFunction(args.join(" "));
-      return null;
+      return args;
     },
     typeof: (x) => {
+      if (x === null) return "null";
       return typeof x;
     },
     exit: () => {
@@ -40,12 +41,18 @@ export function scriptFunctions(outputFunction = console.log) {
   };
 }
 
-export function evaluate(node, environment = {}, functions) {
+export function evaluate(
+  node,
+  environment = {},
+  functions = scriptFunctions()
+) {
   switch (node.type) {
     case "number":
     case "string":
     case "boolean":
       return node.value;
+    case "null":
+      return null;
     case "identifier":
       if (!(node.name in environment)) {
         throw new Error("undefined variable: " + node.name);
@@ -97,50 +104,57 @@ export function evaluate(node, environment = {}, functions) {
           body: node.expression.body,
         };
       } else {
-        value = evaluate(expression, environment);
+        value = evaluate(expression, environment, functions);
       }
 
       environment[node.name] = value;
       return value;
     }
     case "call": {
-      const args = node.arguments.map((arg) => evaluate(arg, environment));
+      const args = node.arguments.map((arg) =>
+        evaluate(arg, environment, functions)
+      );
 
       if (node.callee && node.callee.type === "property") {
-        const obj = evaluate(node.callee.object, environment);
+        const obj = evaluate(node.callee.object, environment, functions);
         const prop = node.callee.property;
-
-        if (Array.isArray(obj)) {
-          if (prop === "push") {
-            obj.push(...args);
-            return obj;
-          }
+        if (Array.isArray(obj) && prop === "push") {
+          obj.push(...args);
+          return obj;
         }
-
         const method = obj?.[prop];
         if (typeof method === "function") {
           return method.apply(obj, args);
         }
-
-        throw new Error("property is not a function: " + prop);
+        throw new Error(`property "${prop}" is not a function`);
       }
 
-      if (typeof functions[node.name] === "function") {
-        return functions[node.name](...args);
+      if (
+        node.callee &&
+        node.callee.type === "identifier" &&
+        typeof functions[node.callee.name] === "function"
+      ) {
+        return functions[node.callee.name](...args);
       }
 
-      const userFunction = environment[node.name];
-      if (userFunction && userFunction.type === "userFunction") {
+      if (
+        node.callee &&
+        node.callee.type === "identifier" &&
+        environment[node.callee.name]?.type === "userFunction"
+      ) {
+        const fn = environment[node.callee.name];
         const local = { ...environment };
-        for (let i = 0; i < userFunction.params.length; i++) {
-          const paramName = userFunction.params[i];
-          local[paramName] = args[i];
+        fn.params.forEach((p, i) => (local[p] = args[i]));
+        try {
+          return evaluate(fn.body, local, functions);
+        } catch (e) {
+          if (e.type === "return") return e.value;
+          throw e;
         }
-        return evaluate(userFunction.body, local, functions);
       }
 
       throw new Error(
-        "unknown function: " + (node.name ?? node.callee?.property)
+        "unknown function: " + (node.callee?.name ?? node.callee?.property)
       );
     }
     case "block": {
@@ -185,10 +199,16 @@ export function evaluate(node, environment = {}, functions) {
 
       return result;
     }
+    case "return": {
+      throw {
+        type: "return",
+        value: evaluate(node.expression, environment, functions),
+      };
+    }
     case "function":
       throw new Error("functions must be assigned to a variable");
     case "property": {
-      const object = evaluate(node.object, environment);
+      const object = evaluate(node.object, environment, functions);
       const property = node.property;
 
       if (Array.isArray(object)) {

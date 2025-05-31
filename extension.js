@@ -24,6 +24,17 @@ function interpret(code, outputChannel) {
   return { result: lastResult, environment };
 }
 
+function extractFunctionArgs(input) {
+  if (typeof input !== "function") return [];
+  const source = input.toString();
+  const match = source.match(/\(([^)]*)\)/);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s);
+}
+
 function activate(context) {
   const outputChannel = vscode.window.createOutputChannel("DDE Run");
 
@@ -32,25 +43,40 @@ function activate(context) {
     {
       provideCompletionItems(document) {
         const text = document.getText();
-        const variables = [];
+
+        let ast = [];
         try {
           const tokens = tokenize(text);
-          const parser = new Parser(tokens);
-          const ast = parser.parse();
-          for (const node of ast) {
-            if (node.type === "assignment") {
+          ast = new Parser(tokens).parse();
+        } catch {}
+
+        const variables = [];
+        const functions = [];
+        for (const node of ast) {
+          if (node.type === "assignment") {
+            if (node.expression.type === "function") {
+              functions.push(node.name);
+            } else {
               variables.push(node.name);
             }
           }
-        } catch {}
+        }
 
-        const suggestions = [
+        return [
           ...Object.keys(scriptFunctions()).map((name) => {
             const item = new vscode.CompletionItem(
               name,
               vscode.CompletionItemKind.Function
             );
-            item.detail = "Built-in function";
+            item.detail = "Built-in";
+            return item;
+          }),
+          ...functions.map((name) => {
+            const item = new vscode.CompletionItem(
+              name,
+              vscode.CompletionItemKind.Function
+            );
+            item.detail = "User-defined";
             return item;
           }),
           ...variables.map((name) => {
@@ -58,39 +84,90 @@ function activate(context) {
               name,
               vscode.CompletionItemKind.Variable
             );
-            item.detail = "Declared variable";
+            item.detail = "Variable";
             return item;
           }),
         ];
-
-        return suggestions;
       },
     },
-    ""
+    "" 
   );
   context.subscriptions.push(provider);
 
+  const signatureProvider = vscode.languages.registerSignatureHelpProvider(
+    "dde",
+    {
+      provideSignatureHelp(document, position) {
+        const code = document.getText();
+        let ast = [];
+        try {
+          ast = new Parser(tokenize(code)).parse();
+        } catch {
+          return null;
+        }
+
+        const allFunctions = {};
+        for (const [name, input] of Object.entries(scriptFunctions())) {
+          allFunctions[name] = extractFunctionArgs(input);
+        }
+
+        for (const node of ast) {
+          if (
+            node.type === "assignment" &&
+            node.expression.type === "function"
+          ) {
+            allFunctions[node.name] = node.expression.params || [];
+          }
+        }
+
+        const line = document
+          .lineAt(position.line)
+          .text.slice(0, position.character);
+
+        const callMatch = line.match(/([a-zA-Z_][\w]*)\s*\(([^)]*)$/);
+        if (!callMatch) return null;
+
+        const [, functionName, argsSoFar] = callMatch;
+        const params = allFunctions[functionName];
+        if (!params) return null;
+
+        const info = new vscode.SignatureInformation(
+          `${functionName}(${params.join(", ")})`
+        );
+        info.parameters = params.map((p) => new vscode.ParameterInformation(p));
+
+        const activeParameter = Math.min(
+          argsSoFar.split(",").length - 1,
+          params.length - 1
+        );
+
+        const signatureHelp = new vscode.SignatureHelp();
+        signatureHelp.signatures = [info];
+        signatureHelp.activeSignature = 0;
+        signatureHelp.activeParameter = activeParameter;
+        return signatureHelp;
+      },
+    },
+    {
+      triggerCharacters: ["(", ","],
+      retriggerCharacters: [",", " "],
+    }
+  );
+  context.subscriptions.push(signatureProvider);
+
   const command = vscode.commands.registerCommand("dde.runFile", () => {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showErrorMessage("No active editor to run");
-      return;
-    }
+    if (!editor) return vscode.window.showErrorMessage("No active editor");
 
-    const doc = editor.document;
-    if (!doc.fileName.endsWith(".dde")) {
-      vscode.window.showErrorMessage("This command only works with .dde files");
-      return;
+    const document = editor.document;
+    if (!document.fileName.endsWith(".dde")) {
+      return vscode.window.showErrorMessage("Not a .dde file");
     }
 
     outputChannel.clear();
-    const code = doc.getText();
-    const { result, environment } = interpret(code, outputChannel);
-
-    outputChannel.appendLine("\n=== Final Result ===");
+    const { result } = interpret(document.getText(), outputChannel);
+    outputChannel.appendLine("\n=== Result ===");
     outputChannel.appendLine(JSON.stringify(result, null, 2));
-    outputChannel.appendLine("=== Environment ===");
-    outputChannel.appendLine(JSON.stringify(environment, null, 2));
     outputChannel.show(true);
   });
   context.subscriptions.push(command);

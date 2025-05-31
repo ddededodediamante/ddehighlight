@@ -42,6 +42,19 @@ export class Parser {
         return this.parseIfStatement();
       } else if (token.value === "for") {
         return this.parseForLoop();
+      } else if (token.value === "return") {
+        this.consume("keyword", "return");
+
+        if (
+          !this.peek() ||
+          this.peek().type === "semicolon" ||
+          this.peek().value === "}"
+        ) {
+          return { type: "return", expression: null };
+        }
+
+        const expr = this.parseExpression();
+        return { type: "return", expression: expr };
       }
     }
 
@@ -119,11 +132,19 @@ export class Parser {
     return node;
   }
 
-  parseFunctionCall(name) {
+  parseFunctionCall(callee) {
+    if (typeof callee === "string") {
+      callee = { type: "identifier", name: callee };
+    }
+
     this.consume("parenthesis", "(");
     const args = [];
 
-    while (this.peek() && this.peek().value !== ")") {
+    while (
+      this.peek() &&
+      this.peek().value !== ")" &&
+      this.peek().value !== "."
+    ) {
       args.push(this.parseExpression());
       if (this.peek().value === ",") {
         this.consume("comma");
@@ -133,10 +154,9 @@ export class Parser {
     }
 
     this.consume("parenthesis", ")");
-
     return {
       type: "call",
-      name,
+      callee,
       arguments: args,
     };
   }
@@ -282,96 +302,81 @@ export class Parser {
 
   parsePrimary() {
     const token = this.peek();
-    const { type, value } = token;
-    let node;
+    if (!token) throw new Error("unexpected end of input");
 
-    if (type === "number") {
-      this.consume("number");
-      node = { type, value: Number(value) };
-    } else if (type === "string") {
-      this.consume("string");
-      node = { type, value: String(value) };
-    } else if (type === "boolean") {
-      this.consume("boolean");
-      node = { type, value: Boolean(value) };
-    } else if (type === "identifier") {
-      const identToken = this.consume("identifier");
-      if (this.peek()?.type === "parenthesis" && this.peek().value === "(") {
-        return this.parseFunctionCall(identToken.value);
-      }
-      node = { type: "identifier", name: identToken.value };
-    } else if (type === "parenthesis" && value === "(") {
-      this.consume("parenthesis", "(");
-      node = this.parseExpression();
-      this.consume("parenthesis", ")");
-    } else if (type === "bracket" && value === "{") {
-      node = this.parseBlock();
-    } else if (type === "squarebracket" && value === "[") {
-      this.consume("squarebracket", "[");
-      const values = [];
-      while (this.peek() && this.peek().value !== "]") {
-        values.push(this.parseExpression());
-        if (this.peek().value === ",") {
-          this.consume("comma");
-        } else {
-          break;
+    let node;
+    switch (token.type) {
+      case "keyword":
+        if (token.value === "null") {
+          this.consume("keyword", "null");
+          return { type: "null", value: null };
         }
-      }
-      this.consume("squarebracket", "]");
-      node = { type: "array", arguments: values };
-    } else {
-      throw new Error("unexpected token: " + JSON.stringify(token));
+        break;
+      case "bracket":
+        if (token.value === "{") {
+          return this.parseBlock();
+        }
+        break;
+      case "number":
+        this.consume("number");
+        node = { type: "number", value: Number(token.value) };
+        break;
+      case "string":
+        this.consume("string");
+        node = { type: "string", value: token.value };
+        break;
+      case "boolean":
+        this.consume("boolean");
+        node = { type: "boolean", value: token.value };
+        break;
+      case "parenthesis":
+        this.consume("parenthesis", "(");
+        node = this.parseExpression();
+        this.consume("parenthesis", ")");
+        break;
+      case "identifier":
+        const name = token.value;
+        this.consume("identifier");
+
+        if (this.peek()?.type === "parenthesis" && this.peek().value === "(") {
+          node = this.parseFunctionCall(name);
+        } else {
+          node = { type: "identifier", name };
+        }
+        break;
+      default:
+        throw new Error("unexpected token: " + JSON.stringify(token));
     }
 
     while (true) {
-      let next = this.peek();
+      const next = this.peek();
       if (!next) break;
 
       if (
         (next.type === "parenthesis" && next.value === ")") ||
         (next.type === "bracket" && next.value === "}")
-      ) {
+      )
         break;
-      }
 
-      if (next.type === "bracket" && next.value === "[") {
-        this.consume("bracket", "[");
-        const indexExpr = this.parseExpression();
-        this.consume("bracket", "]");
-        node = {
-          type: "index",
-          object: node,
-          index: indexExpr,
-        };
+      if (next.type === "squarebracket" && next.value === "[") {
+        this.consume("squarebracket", "[");
+        const idx = this.parseExpression();
+        this.consume("squarebracket", "]");
+        node = { type: "index", object: node, index: idx };
         continue;
       }
 
-      if (next.type === "dot") {
-        this.consume("dot");
-        const propToken = this.consume("identifier");
-        if (
-          this.peek() &&
-          this.peek().type === "parenthesis" &&
-          this.peek().value === "("
-        ) {
-          const args = this.parseFunctionCallArgs();
-          node = {
-            type: "call",
-            callee: {
-              type: "property",
-              object: node,
-              property: propToken.value,
-            },
-            arguments: args,
-          };
+      if (next.value === ".") {
+        this.consume(next.type, ".");
+        const prop = this.consume("identifier").value;
+
+        if (this.peek()?.type === "parenthesis" && this.peek().value === "(") {
+          const propAst = { type: "property", object: node, property: prop };
+          return this.parseFunctionCall(propAst);
         } else {
-          node = {
-            type: "property",
-            object: node,
-            property: propToken.value,
-          };
+          node = { type: "property", object: node, property: prop };
+          continue;
         }
-        continue;
       }
       break;
     }

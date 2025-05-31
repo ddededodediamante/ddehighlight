@@ -70,7 +70,7 @@ export function tokenize(input) {
       if (isBoolean(identifierStr)) {
         tokens.push({ type: "boolean", value: identifierStr === "true" });
       } else if (
-        ["if", "else", "elseif", "for", "in"].includes(identifierStr)
+        ["if", "else", "elseif", "for", "in", "return", "null"].includes(identifierStr)
       ) {
         tokens.push({ type: "keyword", value: identifierStr });
       } else {
