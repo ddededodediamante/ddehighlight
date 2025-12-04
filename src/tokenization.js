@@ -1,153 +1,165 @@
-// @ts-nocheck
+const KEYWORDS = new Set([
+  "let",
+  "function",
+  "return",
+  "if",
+  "else",
+  "while",
+  "true",
+  "false",
+  "null",
+]);
+
 export function tokenize(input) {
-  let tokens = [],
-    position = 0;
+  const tokens = [];
+  let i = 0;
 
-  const isNumber = (i) => !isNaN(i) && !isNaN(parseFloat(i));
-  const isWhitespace = (i) => /\s/.test(i);
-  const isMathOperator = (i) => "+-*/".includes(i);
-  const isBoolean = (i) => i === "true" || i === "false";
+  const isWhitespace = (ch) => /\s/.test(ch);
+  const isDigit = (ch) => /[0-9]/.test(ch);
+  const isIdentStart = (ch) => /[a-zA-Z_]/.test(ch);
+  const isIdent = (ch) => /[a-zA-Z0-9_]/.test(ch);
 
-  while (position < input.length) {
-    let current = input[position];
+  while (i < input.length) {
+    let ch = input[i];
 
+    // whitespace
+    if (isWhitespace(ch)) {
+      i++;
+      continue;
+    }
+
+    // comments
+    if (ch === "/" && input[i + 1] === "/") {
+      i += 2;
+      while (i < input.length && input[i] !== "\n") i++;
+      continue;
+    }
+    if (ch === "/" && input[i + 1] === "*") {
+      i += 2;
+      while (i < input.length && !(input[i] === "*" && input[i + 1] === "/"))
+        i++;
+      i += 2;
+      continue;
+    }
+
+    // numbers
+    if (isDigit(ch) || (ch === "." && isDigit(input[i + 1]))) {
+      let start = i;
+      if (ch === "0" && (input[i + 1] === "x" || input[i + 1] === "X")) {
+        i += 2;
+        while (/[0-9a-fA-F]/.test(input[i])) i++;
+      } else {
+        while (isDigit(input[i])) i++;
+        if (input[i] === ".") {
+          i++;
+          while (isDigit(input[i])) i++;
+        }
+        if (input[i] === "e" || input[i] === "E") {
+          i++;
+          if (input[i] === "+" || input[i] === "-") i++;
+          while (isDigit(input[i])) i++;
+        }
+      }
+      tokens.push({ type: "NUMBER", value: input.slice(start, i) });
+      continue;
+    }
+
+    // strings
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      i++;
+      let start = i;
+      let str = "";
+      while (i < input.length && input[i] !== quote) {
+        if (input[i] === "\\") {
+          i++;
+          const esc = input[i];
+          if (esc === "n") str += "\n";
+          else if (esc === "r") str += "\r";
+          else if (esc === "t") str += "\t";
+          else if (esc === "b") str += "\b";
+          else if (esc === "f") str += "\f";
+          else if (esc === "u") {
+            // unicode \uXXXX
+            const code = input.slice(i + 1, i + 5);
+            str += String.fromCharCode(parseInt(code, 16));
+            i += 4;
+          } else {
+            str += esc;
+          }
+          i++;
+        } else {
+          str += input[i++];
+        }
+      }
+      i++; // closing quote
+      tokens.push({ type: "STRING", value: str });
+      continue;
+    }
+
+    // identifiers & keywords
+    if (isIdentStart(ch)) {
+      let start = i++;
+      while (i < input.length && isIdent(input[i])) i++;
+      const word = input.slice(start, i);
+      if (KEYWORDS.has(word)) tokens.push({ type: "KEYWORD", value: word });
+      else tokens.push({ type: "IDENT", value: word });
+      continue;
+    }
+
+    // two-char operators
+    const two = input.slice(i, i + 2);
     if (
-      current === "#" &&
-      (position === 0 || isWhitespace(input[position - 1]))
+      [
+        "==",
+        "!=",
+        ">=",
+        "<=",
+        "&&",
+        "||",
+        "=>",
+        "++",
+        "--",
+        "===",
+        "!==",
+      ].includes(two)
     ) {
-      while (position < input.length && input[position] !== "\n") {
-        position++;
-      }
+      tokens.push({ type: "OP", value: two });
+      i += 2;
       continue;
     }
 
-    if (isWhitespace(current)) {
-      position++;
+    // single-char tokens
+    const singleMap = {
+      "+": "+",
+      "-": "-",
+      "*": "*",
+      "/": "/",
+      "%": "%",
+      "^": "^",
+      ">": ">",
+      "<": "<",
+      "=": "=",
+      "!": "!",
+      "(": "(",
+      ")": ")",
+      "{": "{",
+      "}": "}",
+      "[": "[",
+      "]": "]",
+      ",": ",",
+      ";": ";",
+      ":": ":",
+    };
+    if (singleMap[ch]) {
+      tokens.push({ type: "OP", value: ch });
+      i++;
       continue;
     }
 
-    if (isNumber(current)) {
-      let numberStr = "";
-      while (
-        position < input.length &&
-        (isNumber(input[position]) || input[position] === ".")
-      ) {
-        numberStr += input[position];
-        position++;
-      }
-
-      if (numberStr.endsWith(".")) numberStr += "0";
-
-      tokens.push({ type: "number", value: numberStr });
-      continue;
-    }
-
-    if (current === '"' || current === "'") {
-      let quote = current;
-      let stringContent = "";
-      position++;
-
-      while (position < input.length && input[position] !== quote) {
-        stringContent += input[position];
-        position++;
-      }
-
-      if (position === input.length) {
-        throw new Error("unterminated string literal");
-      }
-      position++;
-      tokens.push({ type: "string", value: stringContent });
-      continue;
-    }
-
-    if (/[a-zA-Z_]/.test(current)) {
-      let identifierStr = "";
-      while (position < input.length && /[a-zA-Z0-9_]/.test(input[position])) {
-        identifierStr += input[position];
-        position++;
-      }
-
-      if (isBoolean(identifierStr)) {
-        tokens.push({ type: "boolean", value: identifierStr === "true" });
-      } else if (
-        ["if", "else", "elseif", "for", "in", "return", "null"].includes(identifierStr)
-      ) {
-        tokens.push({ type: "keyword", value: identifierStr });
-      } else {
-        tokens.push({ type: "identifier", value: identifierStr });
-      }
-      continue;
-    }
-
-    if (current === "=") {
-      let next = input[position + 1];
-      if (next === "=") {
-        tokens.push({ type: "comparator", value: "==" });
-        position += 2;
-      } else {
-        tokens.push({ type: "operator", value: "=" });
-        position++;
-      }
-      continue;
-    }
-
-    if ("<>!".includes(current)) {
-      let value = current;
-      let next = input[position + 1];
-      if (next === "=") {
-        value += "=";
-        position += 2;
-      } else {
-        position++;
-      }
-      tokens.push({ type: "comparator", value });
-      continue;
-    }
-
-    if (isMathOperator(current)) {
-      tokens.push({ type: "operator", value: current });
-      position++;
-      continue;
-    }
-
-    if (current === ",") {
-      tokens.push({ type: "comma", value: "," });
-      position++;
-      continue;
-    }
-
-    if (current === ".") {
-      tokens.push({ type: "dot", value: "." });
-      position++;
-      continue;
-    }
-
-    if (current === ";") {
-      tokens.push({ type: "semicolon", value: ";" });
-      position++;
-      continue;
-    }
-
-    if ("{}".includes(current)) {
-      tokens.push({ type: "bracket", value: current });
-      position++;
-      continue;
-    }
-
-    if ("()".includes(current)) {
-      tokens.push({ type: "parenthesis", value: current });
-      position++;
-      continue;
-    }
-
-    if ("[]".includes(current)) {
-      tokens.push({ type: "squarebracket", value: current });
-      position++;
-      continue;
-    }
-
-    throw new Error("unknown character: " + current);
+    throw new Error("Unexpected character: " + ch + " at " + i);
   }
 
+  tokens.push({ type: "EOF" });
   return tokens;
 }

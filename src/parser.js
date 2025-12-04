@@ -1,400 +1,234 @@
-// @ts-nocheck
-export class Parser {
-  constructor(tokens) {
-    this.tokens = tokens;
-    this.pos = 0;
+export function parse(input) {
+  const tokens = tokenize(input);
+  let pos = 0;
+
+  function peek() {
+    return tokens[pos];
   }
 
-  peek() {
-    return this.tokens[this.pos];
+  function next() {
+    return tokens[pos++];
   }
 
-  consume(expectedType, expectedValue) {
-    const token = this.peek();
-
-    if (
-      !token ||
-      (expectedType && token.type !== expectedType) ||
-      (expectedValue != null && token.value !== expectedValue)
-    ) {
-      throw new Error(
-        "expected " + expectedValue + ", got " + (token?.value ?? "nothing")
-      );
-    }
-
-    this.pos++;
-    return token;
+  function match(type, value) {
+    const t = peek();
+    if (!t) return false;
+    if (t.type !== type) return false;
+    if (value !== undefined && t.value !== value) return false;
+    pos++;
+    return true;
   }
 
-  parseExpression() {
-    const token = this.peek();
-
-    if (
-      token.type === "identifier" &&
-      this.tokens[this.pos + 1] &&
-      this.tokens[this.pos + 1].value === "="
-    ) {
-      return this.parseAssignment();
-    }
-
-    if (token.type === "keyword") {
-      if (token.value === "if") {
-        return this.parseIfStatement();
-      } else if (token.value === "for") {
-        return this.parseForLoop();
-      } else if (token.value === "return") {
-        this.consume("keyword", "return");
-
-        if (
-          !this.peek() ||
-          this.peek().type === "semicolon" ||
-          this.peek().value === "}"
-        ) {
-          return { type: "return", expression: null };
-        }
-
-        const expr = this.parseExpression();
-        return { type: "return", expression: expr };
-      }
-    }
-
-    return this.parseComparison();
+  function Node(type, props = {}) {
+    return Object.assign({ type }, props);
   }
 
-  parseAssignment() {
-    const idToken = this.consume("identifier");
+  const PRECEDENCE = {
+    "||": 1,
+    "&&": 2,
+    "==": 3,
+    "!=": 3,
+    "===": 3,
+    "!==": 3,
+    ">": 4,
+    "<": 4,
+    ">=": 4,
+    "<=": 4,
+    "+": 5,
+    "-": 5,
+    "*": 6,
+    "/": 6,
+    "%": 6,
+    "^": 7,
+  };
 
-    this.consume("operator", "=");
-
-    if (this.peek()?.type === "parenthesis" && this.peek()?.value === "(") {
-      return this.parseFunctionDefinition(idToken.value);
+  function parseProgram() {
+    const body = [];
+    while (peek().type !== "EOF") {
+      body.push(parseStatement());
     }
-
-    return {
-      type: "assignment",
-      name: idToken.value,
-      expression: this.parseExpression(),
-    };
+    return Node("Program", { body });
   }
 
-  parseComparison() {
-    let node = this.parseAdditive();
-
-    while (this.peek() && this.peek().type === "comparator") {
-      const operator = this.consume("comparator");
-      const right = this.parseAdditive();
-      node = {
-        type: "binary",
-        operator: operator.value,
-        left: node,
-        right,
-      };
+  function parseStatement() {
+    const t = peek();
+    if (t.type === "KEYWORD") {
+      if (t.value === "let") return parseLet();
+      if (t.value === "function") return parseFunctionDeclaration();
+      if (t.value === "return") return parseReturn();
+      if (t.value === "if") return parseIf();
+      if (t.value === "while") return parseWhile();
     }
 
-    return node;
+    if (t.type === "OP" && t.value === "{") return parseBlock();
+
+    const expr = parseExpression();
+    match("OP", ";"); 
+    return Node("ExpressionStatement", { expression: expr });
   }
 
-  parseAdditive() {
-    let node = this.parseMultiplicative();
-    while (
-      this.peek() &&
-      this.peek().type === "operator" &&
-      (this.peek().value === "+" || this.peek().value === "-")
-    ) {
-      const op = this.consume("operator");
-      const right = this.parseMultiplicative();
-      node = {
-        type: "binary",
-        operator: op.value,
-        left: node,
-        right: right,
-      };
-    }
-    return node;
+  function parseLet() {
+    next(); 
+    const id = expectIdent("Expected identifier after let");
+    match("OP", "=");
+    const init = parseExpression();
+    match("OP", ";");
+    return Node("VariableDeclaration", { id, init });
   }
 
-  parseMultiplicative() {
-    let node = this.parsePrimary();
-    while (
-      this.peek() &&
-      this.peek().type === "operator" &&
-      (this.peek().value === "*" || this.peek().value === "/")
-    ) {
-      const operator = this.consume("operator");
-      const right = this.parsePrimary();
-      node = {
-        type: "binary",
-        operator: operator.value,
-        left: node,
-        right: right,
-      };
-    }
-    return node;
-  }
-
-  parseFunctionCall(callee) {
-    if (typeof callee === "string") {
-      callee = { type: "identifier", name: callee };
-    }
-
-    this.consume("parenthesis", "(");
-    const args = [];
-
-    while (
-      this.peek() &&
-      this.peek().value !== ")" &&
-      this.peek().value !== "."
-    ) {
-      args.push(this.parseExpression());
-      if (this.peek().value === ",") {
-        this.consume("comma");
-      } else {
-        break;
-      }
-    }
-
-    this.consume("parenthesis", ")");
-    return {
-      type: "call",
-      callee,
-      arguments: args,
-    };
-  }
-
-  parseFunctionCallArgs() {
-    this.consume("parenthesis", "(");
-    const args = [];
-
-    while (this.peek() && this.peek().value !== ")") {
-      args.push(this.parseExpression());
-      if (this.peek().value === ",") {
-        this.consume("comma");
-      } else {
-        break;
-      }
-    }
-
-    this.consume("parenthesis", ")");
-    return args;
-  }
-
-  parseFunctionDefinition(name) {
-    this.consume("parenthesis", "(");
+  function parseFunctionDeclaration() {
+    next(); 
+    const id = expectIdent("Expected function name");
+    expectOp("(");
     const params = [];
-
-    while (this.peek() && this.peek().value !== ")") {
-      const paramToken = this.consume("identifier");
-      params.push(paramToken.value);
-      if (this.peek().value === ",") {
-        this.consume("comma");
-      } else {
-        break;
-      }
+    if (!peekIs("OP", ")")) {
+      do {
+        params.push(expectIdent("Expected parameter name"));
+      } while (match("OP", ","));
     }
-
-    this.consume("parenthesis", ")");
-    const body = this.parseBlock();
-
-    return {
-      type: "assignment",
-      name,
-      expression: {
-        type: "function",
-        params,
-        body,
-      },
-    };
+    expectOp(")");
+    const body = parseBlock();
+    return Node("FunctionDeclaration", { id, params, body });
   }
 
-  parseBlock() {
-    this.consume("bracket", "{");
-    const statements = [];
-
-    while (this.peek() && this.peek().value !== "}") {
-      const statement = this.parseExpression();
-      statements.push(statement);
-
-      if (this.peek()?.type === "semicolon") {
-        this.consume("semicolon");
-      }
-    }
-
-    this.consume("bracket", "}");
-
-    return {
-      type: "block",
-      arguments: statements,
-      value: statements[statements.length - 1] ?? null,
-    };
+  function parseReturn() {
+    next();
+    const arg = parseExpression();
+    match("OP", ";");
+    return Node("ReturnStatement", { argument: arg });
   }
 
-  parseIfStatement() {
-    this.consume("keyword", "if");
-    this.consume("parenthesis", "(");
-    const condition = this.parseExpression();
-    this.consume("parenthesis", ")");
-
-    const ifBlock = this.parseBlock();
-    let elseBlock = null;
-
-    const next = this.peek();
-
-    if (next && next.type === "keyword") {
-      if (next.value === "elseif") {
-        this.consume("keyword", "elseif");
-        this.consume("parenthesis", "(");
-        const elseifCondition = this.parseExpression();
-        this.consume("parenthesis", ")");
-        elseBlock = {
-          type: "if",
-          condition: elseifCondition,
-          arguments: this.parseBlock(),
-        };
-      } else if (next.value === "else") {
-        this.consume("keyword", "else");
-        elseBlock =
-          this.peek().value === "{"
-            ? this.parseBlock()
-            : this.parseIfStatement();
-      }
+  function parseIf() {
+    next();
+    expectOp("(");
+    const test = parseExpression();
+    expectOp(")");
+    const consequent = parseStatement();
+    let alternate = null;
+    if (peek().type === "KEYWORD" && peek().value === "else") {
+      next();
+      alternate = parseStatement();
     }
-
-    return {
-      type: "if",
-      condition,
-      arguments: ifBlock,
-      else: elseBlock,
-    };
+    return Node("IfStatement", { test, consequent, alternate });
   }
 
-  parseForLoop() {
-    this.consume("keyword", "for");
-    this.consume("parenthesis", "(");
+  function parseWhile() {
+    next();
+    expectOp("(");
+    const test = parseExpression();
+    expectOp(")");
+    const body = parseStatement();
+    return Node("WhileStatement", { test, body });
+  }
 
-    const itemToken = this.consume("identifier");
-    let indexToken = null;
-
-    if (this.peek().type === "comma") {
-      this.consume("comma");
-      indexToken = this.consume("identifier");
+  function parseBlock() {
+    expectOp("{");
+    const body = [];
+    while (!peekIs("OP", "}") && peek().type !== "EOF") {
+      body.push(parseStatement());
     }
+    expectOp("}");
+    return Node("BlockStatement", { body });
+  }
 
-    this.consume("parenthesis", ")");
-    this.consume("keyword", "in");
+  function parseExpression(rbp = 0) {
+    let t = next();
+    let left = null;
 
-    let iterable;
-    if (this.peek().type === "identifier") {
-      iterable = this.consume("identifier").value;
+    if (t.type === "NUMBER") left = Node("Literal", { value: Number(t.value) });
+    else if (t.type === "STRING") left = Node("Literal", { value: t.value });
+    else if (
+      t.type === "KEYWORD" &&
+      (t.value === "true" || t.value === "false" || t.value === "null")
+    ) {
+      const val =
+        t.value === "true" ? true : t.value === "false" ? false : null;
+      left = Node("Literal", { value: val });
+    } else if (t.type === "IDENT") {
+      left = Node("Identifier", { name: t.value });
+    } else if (t.type === "OP" && t.value === "(") {
+      left = parseExpression();
+      expectOp(")");
+    } else if (
+      t.type === "OP" &&
+      (t.value === "+" || t.value === "-" || t.value === "!")
+    ) {
+      const operator = t.value;
+      const right = parseExpression(7);
+      left = Node("UnaryExpression", { operator, argument: right });
     } else {
-      iterable = this.parseExpression();
-    }
-
-    const body = this.parseBlock();
-
-    return {
-      type: "for",
-      item: itemToken.value,
-      index: indexToken?.value ?? null,
-      iterable,
-      body,
-    };
-  }
-
-  parsePrimary() {
-    const token = this.peek();
-    if (!token) throw new Error("unexpected end of input");
-
-    let node;
-    switch (token.type) {
-      case "keyword":
-        if (token.value === "null") {
-          this.consume("keyword", "null");
-          return { type: "null", value: null };
-        }
-        break;
-      case "bracket":
-        if (token.value === "{") {
-          return this.parseBlock();
-        }
-        break;
-      case "number":
-        this.consume("number");
-        node = { type: "number", value: Number(token.value) };
-        break;
-      case "string":
-        this.consume("string");
-        node = { type: "string", value: token.value };
-        break;
-      case "boolean":
-        this.consume("boolean");
-        node = { type: "boolean", value: token.value };
-        break;
-      case "parenthesis":
-        this.consume("parenthesis", "(");
-        node = this.parseExpression();
-        this.consume("parenthesis", ")");
-        break;
-      case "identifier":
-        const name = token.value;
-        this.consume("identifier");
-
-        if (this.peek()?.type === "parenthesis" && this.peek().value === "(") {
-          node = this.parseFunctionCall(name);
-        } else {
-          node = { type: "identifier", name };
-        }
-        break;
-      default:
-        throw new Error("unexpected token: " + JSON.stringify(token));
+      throw new Error("Unexpected token in expression: " + JSON.stringify(t));
     }
 
     while (true) {
-      const next = this.peek();
-      if (!next) break;
+      const nextTok = peek();
+      if (!nextTok || nextTok.type === "EOF") break;
 
-      if (
-        (next.type === "parenthesis" && next.value === ")") ||
-        (next.type === "bracket" && next.value === "}")
-      )
-        break;
-
-      if (next.type === "squarebracket" && next.value === "[") {
-        this.consume("squarebracket", "[");
-        const idx = this.parseExpression();
-        this.consume("squarebracket", "]");
-        node = { type: "index", object: node, index: idx };
+      if (nextTok.type === "OP" && nextTok.value === "(") {
+        next();
+        const args = [];
+        if (!peekIs("OP", ")")) {
+          do {
+            args.push(parseExpression());
+          } while (match("OP", ","));
+        }
+        expectOp(")");
+        left = Node("CallExpression", { callee: left, arguments: args });
         continue;
       }
 
-      if (next.value === ".") {
-        this.consume(next.type, ".");
-        const prop = this.consume("identifier").value;
-
-        if (this.peek()?.type === "parenthesis" && this.peek().value === "(") {
-          const propAst = { type: "property", object: node, property: prop };
-          return this.parseFunctionCall(propAst);
-        } else {
-          node = { type: "property", object: node, property: prop };
-          continue;
-        }
+      if (nextTok.type === "OP" && nextTok.value === ".") {
+        next();
+        const id = expectIdent("Property name expected after dot");
+        left = Node("MemberExpression", { object: left, property: id });
+        continue;
       }
+
+      if (nextTok.type === "OP" && PRECEDENCE[nextTok.value] !== undefined) {
+        const op = nextTok.value;
+        const prec = PRECEDENCE[op];
+        if (prec <= rbp) break;
+        next();
+        const right = parseExpression(prec);
+        left = Node("BinaryExpression", { operator: op, left, right });
+        continue;
+      }
+
+      if (nextTok.type === "OP" && nextTok.value === "=") {
+        if (rbp >= 1) break;
+        next();
+        const right = parseExpression(0);
+        left = Node("AssignmentExpression", { left, right });
+        continue;
+      }
+
       break;
     }
-    return node;
+
+    return left;
   }
 
-  parse() {
-    const ast = [];
-
-    while (this.pos < this.tokens.length) {
-      if (this.peek().type === "semicolon") {
-        this.consume("semicolon");
-        continue;
-      }
-
-      ast.push(this.parseExpression());
-    }
-
-    return ast;
+  function expectIdent(msg) {
+    const t = next();
+    if (!t || t.type !== "IDENT")
+      throw new Error(msg + " (got " + JSON.stringify(t) + ")");
+    return { type: "Identifier", name: t.value };
   }
+  function expectOp(val) {
+    const t = next();
+    if (!t || t.type !== "OP" || t.value !== val)
+      throw new Error(
+        "Expected operator " + val + ", got " + JSON.stringify(t)
+      );
+    return t;
+  }
+  function peekIs(type, value) {
+    const t = peek();
+    if (!t) return false;
+    if (t.type !== type) return false;
+    if (value !== undefined && t.value !== value) return false;
+    return true;
+  }
+
+  return parseProgram();
 }

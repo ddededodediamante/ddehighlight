@@ -1,186 +1,241 @@
 const vscode = require("vscode");
-const { tokenize } = require("./src/tokenization");
-const { Parser } = require("./src/parser");
-const { scriptFunctions, evaluate } = require("./src/evaluator");
+const { parse } = require("./src/parser");
+const { evaluate } = require("./src/evaluator");
+const { scriptFunctions, Environment } = require("./src/functions");
 
 function interpret(code, outputChannel) {
-  const tokens = tokenize(code);
-  const parser = new Parser(tokens);
-  const ast = parser.parse();
+  let ast;
+  try {
+    ast = parse(code);
+  } catch (error) {
+    outputChannel.appendLine(`error on parse: ${error.message}`);
+    return { result: null, environment: new Environment() };
+  }
 
-  let lastResult;
-  const environment = {};
-
+  const environment = new Environment();
   const functions = scriptFunctions((msg) => outputChannel.appendLine(msg));
 
-  ast.forEach((node, index) => {
-    try {
-      lastResult = evaluate(node, environment, functions);
-    } catch (error) {
-      outputChannel.appendLine(`Error at line ${index + 1}: ${error.message}`);
-    }
-  });
+  let lastValue = null;
 
-  return { result: lastResult, environment };
+  for (const stmt of ast.body) {
+    try {
+      lastValue = evaluate(stmt, environment, functions);
+    } catch (err) {
+      if (err.__return !== undefined) {
+        lastValue = err.__return;
+        break;
+      } else if (!err.__exit) {
+        outputChannel.appendLine(`error: ${err.message}`);
+        break;
+      }
+    }
+  }
+
+  return { result: lastValue, environment };
 }
 
-function extractFunctionArgs(input) {
-  if (typeof input !== "function") return [];
-  const source = input.toString();
-  const match = source.match(/\(([^)]*)\)/);
-  if (!match) return [];
-  return match[1]
+function getDefinitions(code) {
+  let ast;
+  try {
+    ast = parse(code);
+  } catch {
+    return { variables: [], functions: [] };
+  }
+
+  const variables = [];
+  const functions = [];
+
+  for (const stmt of ast.body) {
+    if (stmt.type === "AssignmentStatement") {
+      variables.push(stmt.name);
+    }
+    if (stmt.type === "FunctionDeclaration") {
+      functions.push(stmt.id.name);
+    }
+  }
+
+  return { variables, functions };
+}
+
+function extractFunctionArgs(fn) {
+  const src = fn.toString();
+  const m = src.match(/\(([^)]*)\)/);
+  if (!m) return [];
+  return m[1]
     .split(",")
     .map((s) => s.trim())
-    .filter((s) => s);
+    .filter(Boolean);
 }
 
 function activate(context) {
   const outputChannel = vscode.window.createOutputChannel("DDE Run");
+  const diagnostics = vscode.languages.createDiagnosticCollection("dde");
+  context.subscriptions.push(diagnostics);
 
-  const provider = vscode.languages.registerCompletionItemProvider(
+  function validateDocument(doc) {
+    if (doc.languageId !== "dde") return;
+    try {
+      parse(doc.getText());
+      diagnostics.set(doc.uri, []);
+    } catch (err) {
+      const line = (err.line || 1) - 1;
+      const col = (err.column || 1) - 1;
+      const range = new vscode.Range(line, col, line, col + 1);
+      const diag = new vscode.Diagnostic(
+        range,
+        err.message,
+        vscode.DiagnosticSeverity.Error
+      );
+      diagnostics.set(doc.uri, [diag]);
+    }
+  }
+
+  vscode.workspace.textDocuments.forEach(validateDocument);
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(validateDocument),
+    vscode.workspace.onDidChangeTextDocument((e) =>
+      validateDocument(e.document)
+    ),
+    vscode.workspace.onDidCloseTextDocument((doc) =>
+      diagnostics.delete(doc.uri)
+    )
+  );
+
+  const completionProvider = vscode.languages.registerCompletionItemProvider(
     "dde",
     {
-      provideCompletionItems(document) {
+      provideCompletionItems(document, position) {
         const text = document.getText();
-
-        let ast = [];
-        try {
-          const tokens = tokenize(text);
-          ast = new Parser(tokens).parse();
-        } catch {}
-
-        const variables = [];
-        const functions = [];
-        for (const node of ast) {
-          if (node.type === "assignment") {
-            if (node.expression.type === "function") {
-              functions.push(node.name);
-            } else {
-              variables.push(node.name);
-            }
-          }
-        }
-
-        return [
-          ...Object.keys(scriptFunctions()).map((name) => {
-            const item = new vscode.CompletionItem(
-              name,
-              vscode.CompletionItemKind.Function
-            );
-            item.detail = "Built-in";
-            return item;
-          }),
-          ...functions.map((name) => {
-            const item = new vscode.CompletionItem(
-              name,
-              vscode.CompletionItemKind.Function
-            );
-            item.detail = "User-defined";
-            return item;
-          }),
-          ...variables.map((name) => {
-            const item = new vscode.CompletionItem(
-              name,
-              vscode.CompletionItemKind.Variable
-            );
-            item.detail = "Variable";
-            return item;
-          }),
-        ];
+        const { variables, functions } = getDefinitions(text);
+        const keywords = [
+          "if",
+          "else",
+          "for",
+          "in",
+          "while",
+          "return",
+          "function",
+          "null",
+        ].map((i) => {
+          const item = new vscode.CompletionItem(
+            i,
+            vscode.CompletionItemKind.Keyword
+          );
+          return item;
+        });
+        const vars = variables.map((name) => {
+          const item = new vscode.CompletionItem(
+            name,
+            vscode.CompletionItemKind.Variable
+          );
+          item.detail = "Defined variable";
+          return item;
+        });
+        const funcs = functions.map((name) => {
+          const item = new vscode.CompletionItem(
+            name,
+            vscode.CompletionItemKind.Function
+          );
+          item.detail = "Defined function";
+          return item;
+        });
+        const builtins = Object.keys(scriptFunctions()).map((name) => {
+          const item = new vscode.CompletionItem(
+            name,
+            vscode.CompletionItemKind.Function
+          );
+          item.detail = "Built-in function";
+          return item;
+        });
+        return [...vars, ...funcs, ...keywords, ...builtins];
       },
     },
-    "" 
+    ".",
+    " "
   );
-  context.subscriptions.push(provider);
+  context.subscriptions.push(completionProvider);
 
   const signatureProvider = vscode.languages.registerSignatureHelpProvider(
     "dde",
     {
       provideSignatureHelp(document, position) {
-        const code = document.getText();
-        let ast = [];
-        try {
-          ast = new Parser(tokenize(code)).parse();
-        } catch {
-          return null;
-        }
+        const text = document.getText();
 
-        const allFunctions = {};
-        for (const [name, input] of Object.entries(scriptFunctions())) {
-          allFunctions[name] = extractFunctionArgs(input);
-        }
+        const line = document.lineAt(position.line).text;
+        const prefix = line.slice(0, position.character);
+        const m = prefix.match(/([a-zA-Z_]\w*)\s*\($/);
+        if (!m) return null;
+        const name = m[1];
 
-        for (const node of ast) {
-          if (
-            node.type === "assignment" &&
-            node.expression.type === "function"
-          ) {
-            allFunctions[node.name] = node.expression.params || [];
+        let params = [];
+        const builtins = scriptFunctions();
+        if (builtins[name]) params = extractFunctionArgs(builtins[name]);
+        else {
+          const { functions } = getDefinitions(text);
+          if (functions.includes(name)) {
+            const ast = parse(text);
+            for (const stmt of ast.body) {
+              if (
+                stmt.type === "FunctionDeclaration" &&
+                stmt.id.name === name
+              ) {
+                params = stmt.params.map((p) => p.name);
+                break;
+              }
+            }
           }
         }
 
-        const line = document
-          .lineAt(position.line)
-          .text.slice(0, position.character);
+        if (!params.length) return null;
 
-        const callMatch = line.match(/([a-zA-Z_][\w]*)\s*\(([^)]*)$/);
-        if (!callMatch) return null;
-
-        const [, functionName, argsSoFar] = callMatch;
-        const params = allFunctions[functionName];
-        if (!params) return null;
-
-        const info = new vscode.SignatureInformation(
-          `${functionName}(${params.join(", ")})`
+        const signature = new vscode.SignatureInformation(
+          `${name}(${params.join(", ")})`
         );
-        info.parameters = params.map((p) => new vscode.ParameterInformation(p));
-
-        const activeParameter = Math.min(
-          argsSoFar.split(",").length - 1,
-          params.length - 1
+        signature.parameters = params.map(
+          (p) => new vscode.ParameterInformation(p)
         );
-
-        const signatureHelp = new vscode.SignatureHelp();
-        signatureHelp.signatures = [info];
-        signatureHelp.activeSignature = 0;
-        signatureHelp.activeParameter = activeParameter;
-        return signatureHelp;
+        const help = new vscode.SignatureHelp();
+        help.signatures = [signature];
+        help.activeSignature = 0;
+        help.activeParameter = 0;
+        return help;
       },
     },
-    {
-      triggerCharacters: ["(", ","],
-      retriggerCharacters: [",", " "],
-    }
+    "(",
+    ","
   );
   context.subscriptions.push(signatureProvider);
 
-  const command = vscode.commands.registerCommand("dde.runFile", () => {
+  const runCmd = vscode.commands.registerCommand("dde.runFile", () => {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return vscode.window.showErrorMessage("No active editor");
 
-    const document = editor.document;
+    const document = editor.document; 
+
     if (!document.fileName.endsWith(".dde")) {
       return vscode.window.showErrorMessage("Not a .dde file");
     }
 
     outputChannel.clear();
+
     const { result } = interpret(document.getText(), outputChannel);
-    outputChannel.appendLine("\n=== Result ===");
+
+    outputChannel.appendLine("=== Result ===");
     outputChannel.appendLine(JSON.stringify(result, null, 2));
     outputChannel.show(true);
   });
-  context.subscriptions.push(command);
+
+  context.subscriptions.push(runCmd);
 
   const statusBar = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100
   );
   statusBar.command = "dde.runFile";
-  statusBar.text = "$(play) Run DDE";
-  statusBar.tooltip = "Run current DDE file";
-  statusBar.show();
+  statusBar.tooltip = "Run DDE file and show environment";
   context.subscriptions.push(statusBar);
+
+  statusBar.show();
 }
 
 function deactivate() {}

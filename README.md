@@ -1,6 +1,6 @@
 # ddeLang Support
 
-A Visual Studio Code extension that adds syntax highlighting for the `ddeLang` programming language.
+A Visual Studio Code extension that adds support for the `ddeLang` programming language.
 
 ## Features
 
@@ -123,25 +123,31 @@ Semicolons `;` are optional but supported for separating expressions.
 
 ### Built-in Keywords
 - `if`, `else`, `elseif`
-- `for`, `in`
-- `return`
-- `null`
+- `for`, `in`, `while`
+- `return`, `null`
+- `true`, `false`
 
 ## File Extension
 
 Files ending in `.dde` will automatically be recognized and highlighted as `ddeLang`.
 
-## Installation
+## 📦 Installation
 
 ### Method 1
-1. Install the extension from the VS Code Marketplace.
+1. Install the `ddeLang` extension from the VS Code Marketplace.
 2. Open a `.dde` file to see `ddeLang` in action.
 
 ### Method 2
-1. Clone `ddeLang`'s repository.
-2. Open the folder in VS Code.
-3. Press `F5` to launch a new VS Code window with the extension enabled.
-4. Open a `.dde` file to see `ddeLang` in action.
+
+1. Install globally via npm:
+```bash
+npm i -g ddelang
+```
+
+2. Run a `.dde` file:
+```bash
+dde path/to/file.dde
+```
 
 ## Contributing
 
